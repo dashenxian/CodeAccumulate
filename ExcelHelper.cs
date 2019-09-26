@@ -7,8 +7,14 @@
         /// <returns>行号（从1开始）列号（从1开始）</returns>
         public static (int row, int col) CalcRowCol(string address)
         {
-            int row = 0, col = 0;
             var upAd = address.ToUpper();
+
+            if (Regex.IsMatch(upAd, @"[^A-Z0-9]+"))
+            {
+                throw new ArgumentException($"参数{nameof(address)}单元格地址不合法");
+            }
+            int row = 0, col = 0;
+            
             string rowStr = "";
             for (int i = 0; i < upAd.Length; i++)
             {
