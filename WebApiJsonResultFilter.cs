@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Http;
 using System.Web.Http;
 using System.Web.Http.Filters;
-using JavaWordGenerat.Web.Models;
+using Web.Models;
 
 namespace Web
 {
