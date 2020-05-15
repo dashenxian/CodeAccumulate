@@ -4,7 +4,7 @@ using System.Web.Http;
 using System.Web.Http.Filters;
 using JavaWordGenerat.Web.Models;
 
-namespace JavaWordGenerat.Web
+namespace Web
 {
     public class JsonResultFilter : ActionFilterAttribute
     {
