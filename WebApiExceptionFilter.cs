@@ -29,7 +29,7 @@ namespace Web
                 GlobalConfiguration.Configuration.Formatters.JsonFormatter
                 );
             context.Response = response;
-            Log.Error(ex, ex.Message);
+            Log.Logger.Error(ex, "未知错误发生在{RequestUri},参数为{@ActionArguments}", context?.Request?.RequestUri, context?.ActionContext?.ActionArguments);
         }
     }
 }
