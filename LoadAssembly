@@ -1,0 +1,96 @@
+using Microsoft.Extensions.DependencyModel;
+using Microsoft.Extensions.DependencyModel.Resolution;
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using System.Runtime.Loader;
+
+/// <summary>
+/// 加载依赖程序集
+/// </summary>
+internal class LoadAssembly
+{
+    private static readonly ICompilationAssemblyResolver AssemblyResolver;
+
+    /// <summary>
+    /// 缓存依赖程序集信息
+    /// </summary>
+    private static readonly ConcurrentDictionary<string, CompilationLibrary> DependencyDLL;
+
+    static LoadAssembly()
+    {
+        AssemblyLoadContext.Default.Resolving += new Func<AssemblyLoadContext, AssemblyName, Assembly>(Default_Resolving);
+        //查找依赖程序集的位置
+        AssemblyResolver = new CompositeCompilationAssemblyResolver(new ICompilationAssemblyResolver[3]
+        {
+            new AppBaseCompilationAssemblyResolver(AppDomain.CurrentDomain.BaseDirectory),
+            new ReferenceAssemblyPathResolver(),
+            new PackageCompilationAssemblyResolver()
+        });
+        DependencyDLL = new ConcurrentDictionary<string, CompilationLibrary>();
+
+    }
+    /// <summary>
+    /// 获取程序集，没有加载时先加载程序集
+    /// </summary>
+    /// <param name="assemblyName"></param>
+    /// <returns></returns>
+    public static Assembly GetAssembly(string assemblyName)
+    {
+        string assemblyPath = assemblyName;
+        Assembly assembly = AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a => a.FullName?.Split(",")[0] == assemblyName) ?? AssemblyLoadContext.Default.LoadFromAssemblyPath(assemblyPath);
+        FindDependency(assembly);
+        return assembly;
+    }
+    /// <summary>
+    /// 加载依赖程序集
+    /// </summary>
+    /// <param name="assemblyLoadContext"></param>
+    /// <param name="assemblyName"></param>
+    /// <returns></returns>
+    private static Assembly Default_Resolving(AssemblyLoadContext assemblyLoadContext, AssemblyName assemblyName)
+    {
+        if (DependencyDLL.ContainsKey(assemblyName.Name))
+        {
+            CompilationLibrary library = DependencyDLL[assemblyName.Name];
+            List<string> list = new List<string>();
+            if (AssemblyResolver.TryResolveAssemblyPaths(library, list) && list.Count > 0)
+            {
+                Assembly assembly = assemblyLoadContext.LoadFromAssemblyPath(list[0]);
+                FindDependency(assembly);
+                return assembly;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// 查找依赖程序集
+    /// </summary>
+    /// <param name="assembly"></param>
+    private static void FindDependency(Assembly assembly)
+    {
+        DependencyContext dependencyContext = DependencyContext.Load(assembly);
+        if (dependencyContext == null)
+        {
+            return;
+        }
+        foreach (CompilationLibrary compilationLibrary in dependencyContext.CompileLibraries)
+        {
+            if (!DependencyDLL.ContainsKey(compilationLibrary.Name) && !AppDomain.CurrentDomain.GetAssemblies().Any(a => a.FullName?.Split(',')[0] == compilationLibrary.Name))
+            {
+                RuntimeLibrary runtimeLibrary = dependencyContext.RuntimeLibraries.FirstOrDefault(runtime => runtime.Name == compilationLibrary.Name);
+                CompilationLibrary value = new CompilationLibrary(runtimeLibrary.Type,
+                    runtimeLibrary.Name,
+                    runtimeLibrary.Version,
+                    runtimeLibrary.Hash,
+                    runtimeLibrary.RuntimeAssemblyGroups.SelectMany(g => g.AssetPaths),
+                    runtimeLibrary.Dependencies,
+                    runtimeLibrary.Serviceable);
+                DependencyDLL[runtimeLibrary.Name] = value;
+            }
+        }
+    }
+}
